@@ -1,268 +1,61 @@
-# Intent
+# Harness
 
-**Intent** is a desktop application for coordinating coding agents at scale.
-Manage workspaces, notes, tasks, coding agents, git, and terminals in one place.
-The app bundles and manages its Rust backend daemon (`intentd`) for you.
+A reference base for building **agent harnesses** for different domains,
+verticals and categories.
 
-## Install
+It contains the full source of [Intent](docs/reference/UPSTREAM_README.md) by
+intent-hq, a desktop app for coordinating coding agents at scale. That code is
+kept intact so each new harness idea can borrow from a working, heavily tested
+system:
 
-**[Download the latest packaged app from intentapp.dev](https://intentapp.dev).**
-This is the recommended way to use Intent; no separate `intentd` installation
-is needed.
+- **Structure:** a local daemon that owns all state and runs agents, with thin
+  clients on top.
+- **Models:** any agent CLI that speaks ACP, the Agent Client Protocol (Claude
+  Code, Codex, OpenCode, Pi, Grok, Auggie, local models), plus a live model
+  catalog.
+- **Tools and MCP:** a single `workspace_api` tool that runs sandboxed
+  JavaScript against a `ws.*` API, plus user-configured MCP servers.
+- **Doctrine:** versioned agent instructions, pinned per session.
+- **Design, interaction and motion:** a token-based design system with a
+  motion guide, panels and tabs, chat and streaming UI.
 
-For all other versions, visit the
-[cloudlands-releases release page](https://github.com/intent-hq/cloudlands-releases/releases).
+## Start here
 
-## Standalone daemon (advanced)
+| | |
+|---|---|
+| [Roadmap and decisions](docs/harness/ROADMAP.md) | What this repo is for, the iOS and remote-access plans, rebrand notes, known issues |
+| [Docs map](docs/harness/DOCS_MAP.md) | Every doc in the repo and submodules, grouped by topic |
+| [Architecture](docs/ARCHITECTURE.md) | How the daemon is built |
+| [Protocol](docs/protocol/README.md) | How any client talks to the daemon |
+| [Design system](https://github.com/iamDeeSigner/cloudlands-fe/blob/main/docs/DESIGN_SYSTEM.md) | Look, interaction and motion |
 
-Install `intentd` separately only if you want to run and manage the daemon
-independently of the desktop app, such as on a remote host.
+## Layout
 
-Installing `intentd` installs the **sitter** — a small self-updating shim,
-itself named `intentd`, that downloads the latest real daemon from the public
-[intent-hq/intentd-releases](https://github.com/intent-hq/intentd-releases)
-mirror (falling back to the
-[intentd repo's own releases](https://github.com/intent-hq/intentd/releases)),
-forwards all CLI
-arguments to it, and respawns it if it crashes.
-Update checks run only for `intentd serve` (at startup and every 12–24
-hours); one-shot subcommands (e.g. `intentd doctor`) run the installed
-daemon as-is and fail fast with guidance if none is installed yet. The
-sitter tracks the stable channel by default; `intentd sitter channel beta`
-durably pins beta in `<data_dir>/sitter/config.toml` (add `--redownload` to
-install that channel's version immediately — also the downgrade path — then
-`intentd restart` to activate it in place). Per-launch `--sitter-channel` /
-`INTENTD_CHANNEL` overrides take precedence over the pin.
+| Path | Repository | What it is |
+|---|---|---|
+| `packages/intentd` | [iamDeeSigner/intentd](https://github.com/iamDeeSigner/intentd) | Rust daemon: agents, providers, MCP, storage, protocol |
+| `packages/cloudlands-fe` | [iamDeeSigner/cloudlands-fe](https://github.com/iamDeeSigner/cloudlands-fe) | Desktop app: Electron + SvelteKit |
+| `docs/` | this repo | Architecture, wire protocol, frontend guides, Harness notes |
+| `scripts/`, `Makefile` | this repo | Build, test and consistency tooling |
 
-### One-line script (macOS & Linux)
+Both packages are forks of the intent-hq originals. A future iOS app will live at
+`packages/ios` ([plan](docs/harness/ROADMAP.md#ios-app)).
 
-```sh
-curl -fsSL https://github.com/intent-hq/intentd-releases/releases/download/sitter-latest/install.sh | sh
-```
-
-Detects OS/arch, verifies the archive checksum, and installs `intentd` to
-`/usr/local/bin` when writable, else `~/.local/bin` (override with
-`INTENTD_INSTALL_DIR`). Then start the daemon with `intentd serve`, or use
-the Homebrew / `.deb` installs below for a managed background service.
-
-On Windows:
-
-```powershell
-powershell -c "irm https://github.com/intent-hq/intentd-releases/releases/download/sitter-latest/install.ps1 | iex"
-```
-
-### Homebrew (macOS & Linux)
+## Getting the code
 
 ```sh
-brew tap intent-hq/homebrew-tap
-brew install intentd
-brew services start intentd   # runs `intentd serve --resume-all` now and on startup
+git clone --recurse-submodules https://github.com/iamDeeSigner/harness.git
+cd harness
+make doctor   # lists missing prerequisites
+make build    # builds the daemon
+make dev      # runs the desktop app with its own daemon
 ```
 
-The Intent desktop app connects to an already-running daemon such as this
-brew-managed one when configured to; it can also spawn its own bundled
-`intentd` (sidecar mode).
-
-### Debian/Ubuntu
-
-`.deb` packages ship the sitter with a systemd user unit that runs
-`intentd serve --resume-all`; download them from the sitter releases on the
-public
-[intentd-releases page](https://github.com/intent-hq/intentd-releases/releases):
-
-```sh
-# On arm64, use intentd_arm64.deb in both commands.
-curl -fLO https://github.com/intent-hq/intentd-releases/releases/download/sitter-latest/intentd_amd64.deb
-sudo apt install ./intentd_amd64.deb
-# The package does not auto-enable the unit (it is per-user); start it at login with:
-systemctl --user enable --now intentd
-```
-
-### Direct download
-
-Prebuilt sitter archives for macOS, Linux, and Windows are published on the
-public intentd-releases repo's
-[`sitter-latest` release](https://github.com/intent-hq/intentd-releases/releases/tag/sitter-latest).
-
-### Network ports and separate installations
-
-Network access is disabled by default. Local-only installations use their local
-socket and do not allocate a TCP port. On the first WSS start, an installation
-without a configured `server.wsApi.port` tries `5181` and then consecutive ports
-through `65535`, advancing only when an address is already in use. It saves the
-first port that binds on every required address in `<data_dir>/config.toml`
-before announcing readiness. Separate per-user installations select and save
-their own ports; clients should use `intentd pair` or the pairing payload to
-discover the actual listening port.
-
-The saved port stays fixed across restarts. Existing numeric port settings and
-nonzero `INTENTD_TCP_PORT` overrides are also fixed choices. If enabled WSS
-cannot bind at daemon startup, the daemon exits with an error; sitter retries
-do not choose another port. Release the occupied port, or stop the daemon and
-set a different `port` under `[server.wsApi]` in its config. Deliberately
-removing that entry requests a new selection at the next WSS start. Check for
-an environment override before editing the file, since it takes precedence.
-
-Installer and sitter readiness checks remain based on the per-user local
-socket; they do not allocate or probe a WSS port. See the
-[transport contract](docs/protocol/01-transport.md) and
-[port setting semantics](docs/protocol/methods/settings.md#wss-port-assignment)
-for runtime enable failures and reset behavior.
-
-## Build from source
-
-```sh
-git clone --recurse-submodules https://github.com/intent-hq/intent.git
-cd intent
-
-make doctor  # report missing development prerequisites; use BOOTSTRAP_YES=1 make bootstrap-dev-host to install them
-make check   # cargo fmt --check + cargo clippy -- -D warnings + repo-slug fold lint
-make test    # cargo nextest run --workspace (needs cargo-nextest: cargo install cargo-nextest --locked)
-make build   # cargo build --workspace
-```
-
-`make test` and `make test-changed` isolate Cargo target and build outputs in
-stable `intent-gates/<checkout-id>` children of the configured directories.
-Repeated runs of the same canonical checkout reuse those outputs; another
-checkout sharing the configured target directory cannot replace its test executables. The
-runner prints the chosen paths and retains them in `cargo-outputs.json` beside
-its test record. The first run uses a new build cache. Coverage targets and
-custom bare-Cargo scripts do not use this runner and still need distinct output
-directories or an outer lock covering every build and execution.
-
-For less local Rust build storage, opt in with `COMPACT=1 make gate` (check +
-tests), `COMPACT=1 make test`, or `COMPACT=1 make test-changed`. Compact mode
-supports Python 3.10+ and disables dev/test debug information and incremental
-compilation through Cargo settings, including package overrides. Explicit caller
-Rust debug/incremental flags still take precedence. This reduces debugging detail
-and can slow rebuilds; disk savings depend on the workload. Leaving `COMPACT`
-unset or setting `COMPACT=0` preserves ordinary behavior. Coverage rejects
-`COMPACT=1`; compact/default test resume records are separate. See
-[local Rust gates](CONTRIBUTING.md#local-rust-gates) for flag precedence, resume
-options and the component forwarder's mixed-goal boundary.
-
-`make coverage-e2e` / `make coverage-all` additionally need cargo-llvm-cov and the
-llvm-tools-preview component; `make doctor` reports them as an `[optional]` row, and
-`BOOTSTRAP_COVERAGE=1 make bootstrap-dev-host` installs them.
-
-Developing from a remote daemon host? Start with the one-screen
-[agent loop](AGENTS.md#developing-on-a-remote-host); use the
-[frontend recipes](packages/cloudlands-fe/AGENTS.md#dogfooding-a-dev-fe-against-a-daemon)
-and [sandbox internals](docs/fe/DEVELOPER_GUIDE.md#remote-sandbox-internals) only when you
-need component or implementation detail.
-
-`packages/ios` is a private submodule and is skipped automatically
-(`update = none` in `.gitmodules`), so the clone succeeds without access to
-[intent-hq/ios](https://github.com/intent-hq/ios) — the directory is simply
-left empty.
-
-Run the stack locally in one of three ways:
-
-```sh
-# One-command sidecar mode (recommended): the desktop app spawns and
-# supervises its own intentd binary, like the packaged app.
-make dev
-
-# Production-data frontend mode: connect the dev FE to the packaged app's
-# already-running daemon and show the same workspaces and agents.
-make dev-prod
-
-# Two-terminal mode, useful for daemon debugging:
-make dev-daemon   # terminal 1 — dev daemon with an isolated data dir
-make dev-fe       # terminal 2 — desktop app, pinned to the dev daemon's UDS socket
-```
-
-`make dev-prod` uses `INTENTD_SOCKET` when provided. Otherwise, the packaged
-socket defaults to `$HOME/Library/Application Support/intentd/intentd.sock`
-on macOS and `${XDG_DATA_HOME:-$HOME/.local/share}/intentd/intentd.sock`
-on Linux. This mode connects directly to the packaged daemon's production state
-and does not start another daemon.
-
-`make help` lists every documented target.
-
-## Architecture
-
-<!-- TODO: screenshot/demo -->
-
-```
-┌────────────────────────┐   ┌────────────────────────┐
-│      Desktop app       │   │   iOS companion app    │
-│  Electron + SvelteKit  │   │        SwiftUI         │
-└───────────┬────────────┘   └───────────┬────────────┘
-            │ JSON-RPC over UDS          │ JSON-RPC over WSS/TLS (LAN)
-            ▼                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                  intentd — Rust daemon                  │
-│  workspaces · notes · tasks · agents · git · terminals  │
-└─────────────────────────────────────────────────────────┘
-```
-
-Clients are thin: all state and business logic — including the agent runtime —
-live in `intentd`, which persists to SQLite and serves JSON-RPC 2.0 over a
-Unix-domain socket (local clients) and WSS/TLS (LAN clients such as the iOS
-app). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the backend design
-and [docs/protocol/](docs/protocol/README.md) for the canonical wire contract.
-
-This monorepo ties the components together as git submodules and carries the
-cross-cutting docs, tooling, and CI; the code lives in the component repos:
-
-| Path | Repository | Component |
-|------|------------|-----------|
-| `packages/intentd` | [intent-hq/intentd](https://github.com/intent-hq/intentd) | Rust backend daemon |
-| `packages/cloudlands-fe` | [intent-hq/cloudlands-fe](https://github.com/intent-hq/cloudlands-fe) | Electron + SvelteKit desktop app |
-| `packages/ios` | [intent-hq/ios](https://github.com/intent-hq/ios) | SwiftUI iOS companion app (private) |
-
-## Network & privacy
-
-Intent is local-first: all state lives on your machine, and the stack ships
-**no telemetry, analytics, or crash reporting**. Network access is limited to
-update checks against public GitHub Releases and actions you take yourself:
-
-- **Desktop app auto-updates** — the packaged app checks for and downloads
-  updates from GitHub Releases on
-  [intent-hq/cloudlands-releases](https://github.com/intent-hq/cloudlands-releases),
-  and fetches release notes for the installed version from the same repo's
-  GitHub Releases API.
-- **intentd sitter self-update** — the sitter (see [Standalone daemon](#standalone-daemon-advanced))
-  downloads the daemon and checks the channel manifests published on the
-  public
-  [intent-hq/intentd-releases](https://github.com/intent-hq/intentd-releases)
-  mirror, falling back to the
-  [intentd releases page](https://github.com/intent-hq/intentd/releases). The
-  mirror is the permanent public distribution channel, kept even after the
-  intentd repo goes public.
-- **Provider sign-ins (user-initiated)** — signing in to a coding-agent
-  provider (Auggie, Claude Code, Codex, OpenCode, Droid, Grok, Pi) runs that
-  provider's own CLI/OAuth sign-in flow through the daemon; each provider
-  talks to its own vendor service when you sign in.
-- **User-configured integrations** — connecting GitHub (OAuth device flow or
-  personal access token), Linear (API key), or Sentry (API token) has the
-  daemon call the respective service's API with credentials you provide.
-  Nothing is sent to any of these services unless you connect them.
-- **User-configured MCP servers** — the daemon connects to the MCP servers
-  you configure (including when testing a server's connection as you set it
-  up) and to no others.
-
-Coding agents you run are external programs and may access the network
-according to their own provider's behavior.
-
-## Community
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) — bug reports and feature requests are
-  very welcome via the
-  [issue forms](https://github.com/intent-hq/intent/issues/new/choose);
-  external pull requests are deferred for now while the public repository is a
-  read-only snapshot mirror.
-- [SECURITY.md](SECURITY.md) — report security vulnerabilities privately, not
-  through public issues.
-- [Issue tracker](https://github.com/intent-hq/intent/issues) — the single
-  tracker for all Intent components.
-
-## iOS companion app
-
-The SwiftUI iOS companion app is in early development; its repository is
-currently private and will open up later.
+`make help` lists every target. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+the full build and test setup.
 
 ## License
 
-Intent is licensed under the [Apache License 2.0](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The original
+work is by The Intent Authors; keep both files in anything built from this code.
+The license does not cover the Intent name or branding.

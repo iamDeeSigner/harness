@@ -1,13 +1,8 @@
 [submodule "packages/intentd"]
 	path = packages/intentd
-	url = https://github.com/intent-hq/intentd.git
+	url = https://github.com/iamDeeSigner/intentd.git
 	branch = main
 [submodule "packages/cloudlands-fe"]
 	path = packages/cloudlands-fe
-	url = https://github.com/intent-hq/cloudlands-fe.git
+	url = https://github.com/iamDeeSigner/cloudlands-fe.git
 	branch = main
-[submodule "packages/ios"]
-	path = packages/ios
-	url = https://github.com/intent-hq/ios.git
-	branch = main
-	update = none

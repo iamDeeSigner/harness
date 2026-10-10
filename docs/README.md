@@ -2,6 +2,14 @@
 
 Index of the `docs/` tree for the Intent monorepo.
 
+## Harness notes — `harness/`
+
+**[harness/ROADMAP.md](./harness/ROADMAP.md)** records what this repo is for as
+Harness, decisions, and the iOS and remote-access plans.
+**[harness/DOCS_MAP.md](./harness/DOCS_MAP.md)** maps every doc in the repo and
+its submodules by topic. The original Intent README is archived at
+[reference/UPSTREAM_README.md](./reference/UPSTREAM_README.md).
+
 ## Architecture — `ARCHITECTURE.md`
 
 **[ARCHITECTURE.md](./ARCHITECTURE.md)** records the durable architecture of the
